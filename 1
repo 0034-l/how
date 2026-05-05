@@ -1,0 +1,113 @@
+from typing import TypedDict, List
+from langgraph.graph import StateGraph, START, END
+
+# ==========================================
+# 1. 定义全局状态 (State) - 相当于 Agent 之间传递的“共享文档”
+# ==========================================
+class ContentState(TypedDict):
+    product_name: str
+    platforms: List[str]
+    raw_reviews: str             # 检索 Agent 抓取的数据
+    strategy_points: str         # 策略 Agent 提取的卖点
+    drafts: dict                 # 创作 Agent 生成的初稿
+    final_content: dict          # 合规 Agent 审核后的终稿
+    compliance_issues: List[str] # 拦截记录
+
+# ==========================================
+# 2. 定义四个核心 Agent 的独立行为 (Nodes)
+# ==========================================
+
+def data_retrieval_agent(state: ContentState):
+    """【第 1 层】数据检索 Agent：负责从多源获取真实用户反馈"""
+    print("🤖 [数据检索 Agent] 正在全网抓取竞品及本品评价...")
+    # 实际业务中，此处调用爬虫脚本或内部数据库 API
+    mock_reviews = "产品外观好看，吸力挺大，但是运行时噪音有点吵，另外偶尔会卡在沙发底下。"
+    return {"raw_reviews": mock_reviews}
+
+def strategy_agent(state: ContentState):
+    """【第 2 层】策略 Agent：负责长链推理，提炼痛点与转化点"""
+    print("🤖 [策略 Agent] 正在进行深度情绪分析与营销策略推演...")
+    # 实际业务中，此处调用大模型进行深度 Prompt 分析
+    # 例如：llm.invoke(f"分析以下评价，提取核心痛点和营销反转点：{state['raw_reviews']}")
+    strategy = "痛点：噪音、避障。营销策略：主打『上班族专属』，利用APP定时清扫完美规避噪音，强调超薄机身防卡顿。"
+    return {"strategy_points": strategy}
+
+def creation_agent(state: ContentState):
+    """【第 3 层】创作 Agent：赋予不同 Persona 生成多平台矩阵内容"""
+    print("🤖 [创作 Agent] 正在根据不同平台的 Persona 生成图文脚本...")
+    drafts = {}
+    for platform in state["platforms"]:
+        if platform == "小红书":
+            drafts[platform] = "救命！这台扫地机器人简直是懒人福音✨，吸力绝绝子，虽然有点声音但上班时定时清扫完美避开！"
+        elif platform == "抖音":
+            drafts[platform] = "家人们，今天测评这款地表最强扫地机，超薄机身不卡沙发，快去小黄车下单！"
+    return {"drafts": drafts}
+
+def compliance_agent(state: ContentState):
+    """【第 4 层】合规 Agent：负责品牌词库和广告法拦截过滤"""
+    print("🤖 [合规 Agent] 正在进行广告法及敏感词『闭环验证』审核...")
+    final_content = {}
+    issues = []
+    
+    # 模拟违禁词库
+    banned_words = ["绝绝子", "地表最强", "最"]
+    
+    for platform, draft in state["drafts"].items():
+        clean_draft = draft
+        for word in banned_words:
+            if word in clean_draft:
+                issues.append(f"在 {platform} 平台检测到违规词: [{word}]")
+                # 执行替换动作
+                clean_draft = clean_draft.replace(word, "太棒了" if word=="绝绝子" else "实力超群")
+        final_content[platform] = clean_draft
+        
+    return {"final_content": final_content, "compliance_issues": issues}
+
+# ==========================================
+# 3. 编排长链推理逻辑流 (Graph 构建)
+# ==========================================
+workflow = StateGraph(ContentState)
+
+# 将 Agent 注册为节点
+workflow.add_node("DataRetrieval", data_retrieval_agent)
+workflow.add_node("Strategy", strategy_agent)
+workflow.add_node("Creation", creation_agent)
+workflow.add_node("Compliance", compliance_agent)
+
+# 定义 Agent 之间的流转顺序（即你在表单中描述的核心逻辑流）
+workflow.add_edge(START, "DataRetrieval")
+workflow.add_edge("DataRetrieval", "Strategy")
+workflow.add_edge("Strategy", "Creation")
+workflow.add_edge("Creation", "Compliance")
+workflow.add_edge("Compliance", END)
+
+# 编译为可执行应用
+agent_system = workflow.compile()
+
+# ==========================================
+# 4. 业务落地测试
+# ==========================================
+if __name__ == "__main__":
+    # 初始化业务请求上下文
+    initial_request = {
+        "product_name": "星耀 X1 扫地机器人",
+        "platforms": ["小红书", "抖音"]
+    }
+    
+    print("\n🚀 启动『电商爆款内容自动生成』多 Agent 协作流...")
+    print("-" * 60)
+    
+    # 触发工作流
+    result = agent_system.invoke(initial_request)
+    
+    print("-" * 60)
+    print("✅ 任务闭环完成！系统最终输出成果：\n")
+    
+    for platform, content in result["final_content"].items():
+        print(f"📱 【{platform} 专属文案】")
+        print(f"📝 {content}\n")
+    
+    if result["compliance_issues"]:
+        print("⚠️ 合规拦截记录 (已自动修复)：")
+        for issue in result['compliance_issues']:
+            print(f"  - {issue}")
